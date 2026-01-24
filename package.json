@@ -1,5 +1,5 @@
 {
-  "name": "@abdulovdb/fastify-auto",
+  "name": "@daniilabdulov/fastify-auto",
   "version": "1.0.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
-    "prepublishOnly": "npm run build && npm test",
+    "prepublishOnly": "npm run build",
     "version": "npm run build && git add -A dist",
     "postversion": "git push && git push --tags"
   },

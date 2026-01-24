@@ -1,4 +1,10 @@
-import fastify, {FastifyInstance, FastifyRequest} from 'fastify';
+import fastify, {
+  FastifyInstance,
+  FastifyRequest,
+  FastifyReply,
+  FastifyServerOptions,
+  HTTPMethods,
+} from 'fastify';
 import {Validator} from './validator';
 import {Responder} from './responder';
 
@@ -20,7 +26,7 @@ export interface RouteConfig {
 }
 
 export interface RouteDefinition {
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+  method: HTTPMethods;
   path: string;
   schema?: RouteSchema;
   config?: RouteConfig;
@@ -30,7 +36,7 @@ export interface RouteDefinition {
     query?: any;
     headers?: any;
     request: FastifyRequest;
-  }) => Promise<any> | any; // Обработчик возвращает ТОЛЬКО данные
+  }) => Promise<any> | any;
 }
 
 export interface ServiceOptions {
@@ -39,7 +45,7 @@ export interface ServiceOptions {
   host?: string;
   prefix?: string;
   routes: RouteDefinition[];
-  fastifyOptions?: any;
+  fastifyOptions?: FastifyServerOptions;
   autoDocs?: boolean;
 }
 
@@ -67,8 +73,9 @@ export class Service {
           coerceTypes: true,
         },
       },
+      http2: false,
       ...this.options.fastifyOptions,
-    });
+    } as FastifyServerOptions);
 
     this.validator = new Validator();
     this.responder = new Responder();
@@ -81,30 +88,46 @@ export class Service {
 
     this.registerRoutes();
 
-    await this.app.listen({
-      port: this.options.port!,
-      host: this.options.host!,
-    });
+    try {
+      await this.app.listen({
+        port: this.options.port!,
+        host: this.options.host!,
+      });
 
-    console.log(
-      `✅ ${this.options.name} started on http://${this.options.host}:${this.options.port}`,
-    );
+      console.log(
+        `✅ ${this.options.name} started on http://${this.options.host}:${this.options.port}`,
+      );
+    } catch (error) {
+      console.error('Failed to start server:', error);
+      process.exit(1);
+    }
   }
 
   private async setupDocs() {
     try {
-      await this.app.register(import('@fastify/swagger'), {
+      // Динамический импорт для опциональной зависимости
+      const swagger = await import('@fastify/swagger');
+      const swaggerUi = await import('@fastify/swagger-ui');
+
+      await this.app.register(swagger.default, {
         swagger: {
           info: {
             title: this.options.name,
             version: '1.0.0',
           },
           host: `${this.options.host}:${this.options.port}`,
+          schemes: ['http'],
+          consumes: ['application/json'],
+          produces: ['application/json'],
         },
       });
 
-      await this.app.register(import('@fastify/swagger-ui'), {
+      await this.app.register(swaggerUi.default, {
         routePrefix: '/docs',
+        uiConfig: {
+          docExpansion: 'full',
+          deepLinking: false,
+        },
       });
     } catch (error) {
       console.warn('Swagger dependencies not found. Docs disabled.');
@@ -118,24 +141,55 @@ export class Service {
         '/',
       );
 
+      // Создаем схему для маршрута
+      const routeSchema: any = {
+        ...(route.schema || {}),
+        hide: false,
+        tags: route.config?.tags || ['default'],
+      };
+
+      if (route.config?.summary) {
+        routeSchema.summary = route.config.summary;
+      }
+      if (route.config?.description) {
+        routeSchema.description = route.config.description;
+      }
+      if (route.config?.deprecated) {
+        routeSchema.deprecated = route.config.deprecated;
+      }
+
+      // Добавляем стандартные схемы ошибок если их нет
+      if (!routeSchema.response) {
+        routeSchema.response = {};
+      }
+
+      if (!routeSchema.response[400]) {
+        routeSchema.response[400] = {
+          type: 'object',
+          properties: {
+            success: {type: 'boolean'},
+            error: {type: 'string'},
+            details: {type: 'array', nullable: true},
+          },
+        };
+      }
+
+      if (!routeSchema.response[500]) {
+        routeSchema.response[500] = {
+          type: 'object',
+          properties: {
+            success: {type: 'boolean'},
+            error: {type: 'string'},
+          },
+        };
+      }
+
+      // Регистрируем маршрут
       this.app.route({
         method: route.method,
         url: fullPath,
-        schema: {
-          ...route.schema,
-          ...route.config,
-          response: route.schema?.response || {
-            200: {type: 'object'},
-            500: {
-              type: 'object',
-              properties: {
-                success: {type: 'boolean'},
-                error: {type: 'string'},
-              },
-            },
-          },
-        },
-        handler: async (request, reply) => {
+        schema: routeSchema,
+        handler: async (request: FastifyRequest, reply: FastifyReply) => {
           try {
             // 1. Валидация входящих данных
             const validated = this.validator.validateRequest(
@@ -143,7 +197,7 @@ export class Service {
               route.schema,
             );
 
-            // 2. Вызов обработчика с чистыми данными
+            // 2. Вызов обработчика
             const handlerResult = await route.handler({
               body: validated.body,
               params: validated.params,
@@ -158,14 +212,14 @@ export class Service {
               route.schema?.response,
             );
 
-            // 4. Автоматический успешный ответ
+            // 4. Автоматический ответ
             return this.responder.success(
               reply,
               responseData,
               this.getStatusCode(route.method),
             );
           } catch (error: any) {
-            // 5. Автоматическая обработка ошибок
+            // 5. Обработка ошибок
             return this.responder.error(reply, error);
           }
         },
@@ -186,6 +240,10 @@ export class Service {
 
   getApp(): FastifyInstance {
     return this.app;
+  }
+
+  async close(): Promise<void> {
+    await this.app.close();
   }
 }
 
