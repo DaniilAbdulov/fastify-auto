@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Validator = exports.createService = exports.Service = void 0;
-require("reflect-metadata");
 var service_1 = require("./service");
 Object.defineProperty(exports, "Service", { enumerable: true, get: function () { return service_1.Service; } });
 Object.defineProperty(exports, "createService", { enumerable: true, get: function () { return service_1.createService; } });
