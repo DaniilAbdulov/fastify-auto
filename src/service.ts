@@ -5,8 +5,6 @@ import fastify, {
   FastifyServerOptions,
   HTTPMethods,
 } from 'fastify';
-import {Validator} from './validator';
-import {Responder} from './responder';
 
 export interface RouteSchema {
   body?: any;
@@ -51,8 +49,6 @@ export interface ServiceOptions {
 
 export class Service {
   private app: FastifyInstance;
-  private validator: Validator;
-  private responder: Responder;
   private options: ServiceOptions;
 
   constructor(options: ServiceOptions) {
@@ -76,9 +72,6 @@ export class Service {
       http2: false,
       ...this.options.fastifyOptions,
     } as FastifyServerOptions);
-
-    this.validator = new Validator();
-    this.responder = new Responder();
   }
 
   async initialize(): Promise<void> {
@@ -87,6 +80,7 @@ export class Service {
     }
 
     this.registerRoutes();
+    this.setErrorHandler();
 
     try {
       await this.app.listen({
@@ -105,7 +99,6 @@ export class Service {
 
   private async setupDocs() {
     try {
-      // Динамический импорт для опциональной зависимости
       const swagger = await import('@fastify/swagger');
       const swaggerUi = await import('@fastify/swagger-ui');
 
@@ -141,7 +134,6 @@ export class Service {
         '/',
       );
 
-      // Создаем схему для маршрута
       const routeSchema: any = {
         ...(route.schema || {}),
         hide: false,
@@ -158,84 +150,82 @@ export class Service {
         routeSchema.deprecated = route.config.deprecated;
       }
 
-      // Добавляем стандартные схемы ошибок если их нет
-      if (!routeSchema.response) {
-        routeSchema.response = {};
-      }
-
-      if (!routeSchema.response[400]) {
-        routeSchema.response[400] = {
-          type: 'object',
-          properties: {
-            success: {type: 'boolean'},
-            error: {type: 'string'},
-            details: {type: 'array', nullable: true},
-          },
-        };
-      }
-
-      if (!routeSchema.response[500]) {
-        routeSchema.response[500] = {
-          type: 'object',
-          properties: {
-            success: {type: 'boolean'},
-            error: {type: 'string'},
-          },
-        };
-      }
-
-      // Регистрируем маршрут
       this.app.route({
         method: route.method,
         url: fullPath,
         schema: routeSchema,
         handler: async (request: FastifyRequest, reply: FastifyReply) => {
           try {
-            // 1. Валидация входящих данных
-            const validated = this.validator.validateRequest(
-              request,
-              route.schema,
-            );
-
-            // 2. Вызов обработчика
-            const handlerResult = await route.handler({
-              body: validated.body,
-              params: validated.params,
-              query: validated.query,
-              headers: validated.headers,
+            const result = await route.handler({
+              body: request.body,
+              params: request.params,
+              query: request.query,
+              headers: request.headers,
               request,
             });
 
-            // 3. Валидация исходящих данных
-            const responseData = this.validator.validateResponse(
-              handlerResult,
-              route.schema?.response,
-            );
+            const statusCode = this.getStatusCode(route.method, result);
 
-            // 4. Автоматический ответ
-            return this.responder.success(
-              reply,
-              responseData,
-              this.getStatusCode(route.method),
-            );
+            return reply.status(statusCode).send(result);
           } catch (error: any) {
-            // 5. Обработка ошибок
-            return this.responder.error(reply, error);
+            this.handleError(error, request, reply);
           }
         },
       });
     }
   }
 
-  private getStatusCode(method: string): number {
-    const statusCodes: Record<string, number> = {
-      POST: 201,
-      DELETE: 204,
-      PUT: 200,
-      PATCH: 200,
-      GET: 200,
+  private getStatusCode(method: string, result?: any): number {
+    if (method === 'POST' && result !== undefined) return 201;
+    if (method === 'DELETE') return 204;
+    return 200;
+  }
+
+  private handleError(
+    error: any,
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ) {
+    request.log.error(error);
+
+    let statusCode = 500;
+    let message = 'Internal server error';
+    let details: any = undefined;
+
+    // Обработка стандартных ошибок
+    if (error.validation) {
+      statusCode = 400;
+      message = 'Validation failed';
+      details = error.validation;
+    } else if (error.statusCode) {
+      statusCode = error.statusCode;
+      message = error.message || message;
+      details = error.details;
+    } else if (error.code === '23505') {
+      // PostgreSQL unique violation
+      statusCode = 409;
+      message = 'Resource already exists';
+    }
+
+    const errorResponse: any = {
+      error: message,
     };
-    return statusCodes[method] || 200;
+
+    if (details) {
+      errorResponse.details = details;
+    }
+
+    if (process.env.NODE_ENV === 'development' && error.stack) {
+      errorResponse.stack = error.stack;
+    }
+
+    return reply.status(statusCode).send(errorResponse);
+  }
+
+  private setErrorHandler() {
+    this.app.setErrorHandler((error, request, reply) => {
+      this.handleError(error, request, reply);
+    });
   }
 
   getApp(): FastifyInstance {
@@ -247,7 +237,6 @@ export class Service {
   }
 }
 
-// Фабричная функция
 export function createService(options: ServiceOptions): Service {
   return new Service(options);
 }

@@ -1,3 +1,5 @@
+import 'reflect-metadata';
+
 export type {FastifyRequest, FastifyReply, FastifyInstance} from 'fastify';
 
 export {
@@ -10,4 +12,3 @@ export {
 } from './service';
 
 export {Validator} from './validator';
-export {Responder, type ApiResponse} from './responder';
