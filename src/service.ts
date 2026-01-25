@@ -9,6 +9,7 @@ import ajvKeywords from 'ajv-keywords';
 import ajvErrors from 'ajv-errors';
 import {createExtensions} from './extensions/factory';
 import {ServiceExtensions} from './types/extensions';
+import {Knex} from 'knex';
 
 export interface RouteSchema {
   body?: any;
@@ -53,6 +54,7 @@ export interface ServiceOptions {
   fastifyOptions?: FastifyServerOptions;
   autoDocs?: boolean;
   strictValidation?: boolean;
+  dbConnection: Knex.Config;
 }
 
 export class Service {
@@ -69,6 +71,7 @@ export class Service {
       fastifyOptions = {},
       autoDocs = true,
       strictValidation = true,
+      dbConnection,
     } = options;
 
     this.options = {
@@ -80,6 +83,7 @@ export class Service {
       fastifyOptions,
       autoDocs,
       strictValidation,
+      dbConnection,
     };
 
     this.app = fastify({

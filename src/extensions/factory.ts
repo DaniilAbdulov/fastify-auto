@@ -6,6 +6,8 @@ export async function createExtensions(
 ): Promise<ServiceExtensions> {
   const extensions: Partial<ServiceExtensions> = {};
 
+  console.log(`createExtensions`, config);
+
   if (config.extensions?.pg && config.dbConnection) {
     extensions.pg = knex(config.dbConnection);
 
