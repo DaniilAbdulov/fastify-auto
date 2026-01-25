@@ -35,7 +35,7 @@ class Service {
     app;
     options;
     constructor(options) {
-        const { name, routes, port = 3000, host = '0.0.0.0', prefix = '/api', fastifyOptions = {}, autoDocs = true, strictValidation = true, } = options;
+        const { name, routes, port = 3000, host = '0.0.0.0', prefix = '/api', fastifyOptions = {}, autoDocs = true, strictValidation = true, dbConnection, } = options;
         this.options = {
             name,
             routes,
@@ -45,6 +45,7 @@ class Service {
             fastifyOptions,
             autoDocs,
             strictValidation,
+            dbConnection,
         };
         this.app = (0, fastify_1.default)({
             logger: true,

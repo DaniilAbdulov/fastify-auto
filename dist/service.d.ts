@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyServerOptions, HTTPMethods } from 'fastify';
 import { ServiceExtensions } from './types/extensions';
+import { Knex } from 'knex';
 export interface RouteSchema {
     body?: any;
     params?: any;
@@ -37,6 +38,7 @@ export interface ServiceOptions {
     fastifyOptions?: FastifyServerOptions;
     autoDocs?: boolean;
     strictValidation?: boolean;
+    dbConnection: Knex.Config;
 }
 export declare class Service {
     private app;
