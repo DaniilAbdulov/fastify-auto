@@ -179,6 +179,7 @@ export class Service {
 
             return reply.status(statusCode).send(result);
           } catch (error: any) {
+            console.log(`1`);
             this.handleError(error, request, reply);
           }
         },
@@ -197,6 +198,7 @@ export class Service {
     request: FastifyRequest,
     reply: FastifyReply,
   ) {
+    console.log(`2`);
     let statusCode = 500;
     let message = 'Internal server error';
     let details: any = undefined;
@@ -222,13 +224,14 @@ export class Service {
     if (process.env.NODE_ENV === 'development' && error.stack) {
       errorResponse.stack = error.stack;
     }
-
+    console.log(`3`);
     return reply.status(statusCode).send(errorResponse);
   }
 
   private setErrorHandler() {
     this.app.setErrorHandler((error, request, reply) => {
       request.log.error(error);
+      console.log(`4`);
 
       if (error.validation) {
         const errorResponse = {
@@ -239,10 +242,10 @@ export class Service {
             message: error.message,
           },
         };
-
+        console.log(`5`);
         return reply.status(400).send(errorResponse);
       }
-
+      console.log(`6`);
       this.handleError(error, request, reply);
     });
   }
