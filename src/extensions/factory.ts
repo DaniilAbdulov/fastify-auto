@@ -8,7 +8,7 @@ export async function createExtensions(
 
   console.log(`createExtensions`, config);
 
-  if (config.extensions?.pg && config.dbConnection) {
+  if (config.dbConnection) {
     extensions.pg = knex(config.dbConnection);
 
     try {
