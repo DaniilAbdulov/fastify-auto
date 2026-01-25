@@ -28,6 +28,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createService = exports.Service = void 0;
 const fastify_1 = __importDefault(require("fastify"));
+const ajv_keywords_1 = __importDefault(require("ajv-keywords"));
+const ajv_errors_1 = __importDefault(require("ajv-errors"));
 class Service {
     app;
     options;
@@ -43,10 +45,18 @@ class Service {
             logger: true,
             ajv: {
                 customOptions: {
-                    allErrors: true,
-                    removeAdditional: 'all',
-                    coerceTypes: true,
+                    allErrors: true, // Показывать все ошибки
+                    removeAdditional: false, // НЕ удалять дополнительные поля ← ИЗМЕНИЛИ
+                    coerceTypes: false, // Не приводить типы автоматически
+                    useDefaults: false, // Не использовать значения по умолчанию
+                    strict: true, // Строгая валидация
+                    strictSchema: true, // Строгая валидация схемы
+                    strictNumbers: true, // Строгая валидация чисел
+                    strictTypes: true, // Строгая проверка типов
+                    strictTuples: true, // Строгая проверка кортежей
+                    strictRequired: true, // Строгая проверка обязательных полей
                 },
+                plugins: [ajv_keywords_1.default, ajv_errors_1.default],
             },
             http2: false,
             ...this.options.fastifyOptions,
@@ -150,13 +160,21 @@ class Service {
         let statusCode = 500;
         let message = 'Internal server error';
         let details = undefined;
-        // Обработка стандартных ошибок
         if (error.validation) {
-            statusCode = 400;
-            message = 'Validation failed';
-            details = error.validation;
+            const validationError = new Error('Response validation failed');
+            validationError.statusCode = 422;
+            validationError.details = {
+                type: 'response_validation',
+                errors: error.validation,
+                message: 'Response does not match schema',
+            };
+            const errorResponse = {
+                error: 'Response validation failed',
+                details: validationError.details,
+            };
+            return reply.status(500).send(errorResponse);
         }
-        else if (error.statusCode) {
+        if (error.statusCode) {
             statusCode = error.statusCode;
             message = error.message || message;
             details = error.details;
