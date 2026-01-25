@@ -197,28 +197,9 @@ export class Service {
     request: FastifyRequest,
     reply: FastifyReply,
   ) {
-    request.log.error(error);
-
     let statusCode = 500;
     let message = 'Internal server error';
     let details: any = undefined;
-
-    if (error.validation) {
-      const validationError: any = new Error('Response validation failed');
-      validationError.statusCode = 422;
-      validationError.details = {
-        type: 'response_validation',
-        errors: error.validation,
-        message: 'Response does not match schema',
-      };
-
-      const errorResponse = {
-        error: 'Response validation failed',
-        details: validationError.details,
-      };
-
-      return reply.status(500).send(errorResponse);
-    }
 
     if (error.statusCode) {
       statusCode = error.statusCode;
@@ -247,6 +228,21 @@ export class Service {
 
   private setErrorHandler() {
     this.app.setErrorHandler((error, request, reply) => {
+      request.log.error(error);
+
+      if (error.validation) {
+        const errorResponse = {
+          error: 'Validation failed',
+          details: {
+            type: 'validation',
+            errors: error.validation,
+            message: error.message,
+          },
+        };
+
+        return reply.status(400).send(errorResponse);
+      }
+
       this.handleError(error, request, reply);
     });
   }
