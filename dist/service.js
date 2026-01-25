@@ -30,6 +30,7 @@ exports.createService = exports.Service = void 0;
 const fastify_1 = __importDefault(require("fastify"));
 const ajv_keywords_1 = __importDefault(require("ajv-keywords"));
 const ajv_errors_1 = __importDefault(require("ajv-errors"));
+const factory_1 = require("./extensions/factory");
 class Service {
     app;
     options;
@@ -70,7 +71,8 @@ class Service {
         if (this.options.autoDocs) {
             await this.setupDocs();
         }
-        this.registerRoutes();
+        const extensions = await (0, factory_1.createExtensions)(this.options);
+        this.registerRoutes(extensions);
         this.setErrorHandler();
         try {
             await this.app.listen({
@@ -113,7 +115,7 @@ class Service {
             console.warn('Swagger dependencies not found. Docs disabled.');
         }
     }
-    registerRoutes() {
+    registerRoutes(extensions) {
         for (const route of this.options.routes) {
             const fullPath = `${this.options.prefix}${route.path}`.replace(/\/\//g, '/');
             const routeSchema = {
@@ -142,7 +144,7 @@ class Service {
                             query: request.query,
                             headers: request.headers,
                             request,
-                        });
+                        }, extensions);
                         const statusCode = this.getStatusCode(route.method, result);
                         const responseSchema = route.schema?.response?.[statusCode];
                         // Проверяем валидность ответа если есть схема

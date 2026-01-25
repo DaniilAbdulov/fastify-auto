@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyServerOptions, HTTPMethods } from 'fastify';
+import { ServiceExtensions } from './types/extensions';
 export interface RouteSchema {
     body?: any;
     params?: any;
@@ -25,7 +26,7 @@ export interface RouteDefinition {
         query?: any;
         headers?: any;
         request: FastifyRequest;
-    }) => Promise<any> | any;
+    }, extensions: ServiceExtensions) => Promise<any> | any;
 }
 export interface ServiceOptions {
     name: string;
