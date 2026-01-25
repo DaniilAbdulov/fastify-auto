@@ -6,6 +6,9 @@ import fastify, {
   HTTPMethods,
 } from 'fastify';
 
+import ajvKeywords from 'ajv-keywords';
+import ajvErrors from 'ajv-errors';
+
 export interface RouteSchema {
   body?: any;
   params?: any;
@@ -64,10 +67,18 @@ export class Service {
       logger: true,
       ajv: {
         customOptions: {
-          allErrors: true,
-          removeAdditional: 'all',
-          coerceTypes: true,
+          allErrors: true, // Показывать все ошибки
+          removeAdditional: false, // НЕ удалять дополнительные поля ← ИЗМЕНИЛИ
+          coerceTypes: false, // Не приводить типы автоматически
+          useDefaults: false, // Не использовать значения по умолчанию
+          strict: true, // Строгая валидация
+          strictSchema: true, // Строгая валидация схемы
+          strictNumbers: true, // Строгая валидация чисел
+          strictTypes: true, // Строгая проверка типов
+          strictTuples: true, // Строгая проверка кортежей
+          strictRequired: true, // Строгая проверка обязательных полей
         },
+        plugins: [ajvKeywords, ajvErrors],
       },
       http2: false,
       ...this.options.fastifyOptions,
@@ -192,12 +203,24 @@ export class Service {
     let message = 'Internal server error';
     let details: any = undefined;
 
-    // Обработка стандартных ошибок
     if (error.validation) {
-      statusCode = 400;
-      message = 'Validation failed';
-      details = error.validation;
-    } else if (error.statusCode) {
+      const validationError: any = new Error('Response validation failed');
+      validationError.statusCode = 422;
+      validationError.details = {
+        type: 'response_validation',
+        errors: error.validation,
+        message: 'Response does not match schema',
+      };
+
+      const errorResponse = {
+        error: 'Response validation failed',
+        details: validationError.details,
+      };
+
+      return reply.status(500).send(errorResponse);
+    }
+
+    if (error.statusCode) {
       statusCode = error.statusCode;
       message = error.message || message;
       details = error.details;

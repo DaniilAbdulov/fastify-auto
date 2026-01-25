@@ -21,6 +21,8 @@
   },
   "homepage": "https://github.com/DaniilAbdulov/fastify-auto#readme",
   "dependencies": {
+    "ajv-errors": "3.0.0",
+    "ajv-keywords": "5.1.0",
     "fastify": "4.26.2"
   },
   "peerDependencies": {
