@@ -47,7 +47,7 @@ class Service {
                 customOptions: {
                     allErrors: true, // Показывать все ошибки
                     removeAdditional: false, // НЕ удалять дополнительные поля ← ИЗМЕНИЛИ
-                    coerceTypes: false, // Не приводить типы автоматически
+                    coerceTypes: true,
                     useDefaults: false, // Не использовать значения по умолчанию
                     strict: true, // Строгая валидация
                     strictSchema: true, // Строгая валидация схемы
