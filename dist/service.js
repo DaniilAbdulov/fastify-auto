@@ -142,6 +142,7 @@ class Service {
                         return reply.status(statusCode).send(result);
                     }
                     catch (error) {
+                        console.log(`1`);
                         this.handleError(error, request, reply);
                     }
                 },
@@ -156,6 +157,7 @@ class Service {
         return 200;
     }
     handleError(error, request, reply) {
+        console.log(`2`);
         let statusCode = 500;
         let message = 'Internal server error';
         let details = undefined;
@@ -178,11 +180,13 @@ class Service {
         if (process.env.NODE_ENV === 'development' && error.stack) {
             errorResponse.stack = error.stack;
         }
+        console.log(`3`);
         return reply.status(statusCode).send(errorResponse);
     }
     setErrorHandler() {
         this.app.setErrorHandler((error, request, reply) => {
             request.log.error(error);
+            console.log(`4`);
             if (error.validation) {
                 const errorResponse = {
                     error: 'Validation failed',
@@ -192,8 +196,10 @@ class Service {
                         message: error.message,
                     },
                 };
+                console.log(`5`);
                 return reply.status(400).send(errorResponse);
             }
+            console.log(`6`);
             this.handleError(error, request, reply);
         });
     }
