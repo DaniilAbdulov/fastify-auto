@@ -199,8 +199,14 @@ export class Service {
             if (responseSchema) {
               try {
                 // Валидируем ответ
+                if (!this.app.validatorCompiler) {
+                  throw new Error('Validator compiler not initialized');
+                }
+
                 const validator = this.app.validatorCompiler({
                   schema: responseSchema,
+                  method: '',
+                  url: '',
                 });
 
                 const validationResult = validator(result);
