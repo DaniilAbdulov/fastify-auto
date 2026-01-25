@@ -205,8 +205,8 @@ export class Service {
 
                 const validator = this.app.validatorCompiler({
                   schema: responseSchema,
-                  method: '',
-                  url: '',
+                  method: route.method,
+                  url: fullPath,
                 });
 
                 const validationResult = validator(result);
