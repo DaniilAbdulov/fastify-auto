@@ -43,9 +43,8 @@ export declare class Service {
     constructor(options: ServiceOptions);
     initialize(): Promise<void>;
     private setupDocs;
-    private setupHooks;
-    private isSerializationError;
     private registerRoutes;
+    private handleSerializationError;
     private getStatusCode;
     private handleError;
     private setErrorHandler;

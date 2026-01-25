@@ -46,9 +46,7 @@ class Service {
             strictValidation,
         };
         this.app = (0, fastify_1.default)({
-            logger: {
-                level: 'info',
-            },
+            logger: true,
             ajv: {
                 customOptions: {
                     allErrors: true,
@@ -67,7 +65,6 @@ class Service {
             http2: false,
             ...fastifyOptions,
         });
-        this.setupHooks();
     }
     async initialize() {
         if (this.options.autoDocs) {
@@ -116,30 +113,6 @@ class Service {
             console.warn('Swagger dependencies not found. Docs disabled.');
         }
     }
-    setupHooks() {
-        this.app.addHook('onRequest', async (request) => {
-            request.log.info(`Request: ${request.method} ${request.url}`);
-        });
-        this.app.addHook('onError', async (request, reply, error) => {
-            if (this.isSerializationError(error)) {
-                const errorResponse = {
-                    error: 'Response validation failed',
-                    details: {
-                        type: 'response_validation',
-                        message: error.message,
-                        error,
-                    },
-                };
-                reply.status(500).send(errorResponse);
-                return;
-            }
-        });
-    }
-    isSerializationError(error) {
-        return (error.serialization ||
-            (error.message && error.message.includes('is required!')) ||
-            error.message?.includes('serialization'));
-    }
     registerRoutes() {
         for (const route of this.options.routes) {
             const fullPath = `${this.options.prefix}${route.path}`.replace(/\/\//g, '/');
@@ -171,7 +144,38 @@ class Service {
                             request,
                         });
                         const statusCode = this.getStatusCode(route.method, result);
-                        return reply.status(statusCode).send(result);
+                        const responseSchema = route.schema?.response?.[statusCode];
+                        // Проверяем валидность ответа если есть схема
+                        if (responseSchema) {
+                            try {
+                                // Валидируем ответ
+                                if (!this.app.validatorCompiler) {
+                                    throw new Error('Validator compiler not initialized');
+                                }
+                                const validator = this.app.validatorCompiler({
+                                    schema: responseSchema,
+                                    method: route.method,
+                                    url: fullPath,
+                                });
+                                const validationResult = validator(result);
+                                if (validationResult === true) {
+                                    // Ответ валиден - отправляем
+                                    return reply.status(statusCode).send(result);
+                                }
+                                else {
+                                    // Ответ невалиден
+                                    const validationError = new Error('Response validation failed');
+                                    validationError.validation = validator.errors;
+                                    throw validationError;
+                                }
+                            }
+                            catch (validationError) {
+                                return this.handleSerializationError(validationError, reply);
+                            }
+                        }
+                        else {
+                            return reply.status(statusCode).send(result);
+                        }
                     }
                     catch (error) {
                         this.handleError(error, request, reply);
@@ -179,6 +183,41 @@ class Service {
                 },
             });
         }
+    }
+    handleSerializationError(error, reply) {
+        let errorResponse;
+        if (error.message && error.message.includes('is required!')) {
+            const match = error.message.match(/"([^"]+)" is required!/);
+            const fieldName = match ? match[1] : 'field';
+            errorResponse = {
+                error: 'Response Validation Error',
+                reason: `Field "${fieldName}" is required in response`,
+                details: {
+                    type: 'missing_field',
+                    field: fieldName,
+                    message: error.message,
+                },
+            };
+        }
+        else if (error.validation) {
+            const firstError = error.validation[0];
+            const field = firstError.instancePath?.replace('/', '') || 'field';
+            errorResponse = {
+                error: 'Response Validation Error',
+                reason: `${field}: ${firstError.message}`,
+                details: {
+                    type: 'response_validation',
+                    errors: error.validation,
+                },
+            };
+        }
+        else {
+            errorResponse = {
+                error: 'Serialization Error',
+                reason: error.message || 'Failed to serialize response',
+            };
+        }
+        return reply.status(422).send(errorResponse);
     }
     getStatusCode(method, result) {
         if (method === 'POST' && result !== undefined)
@@ -188,25 +227,47 @@ class Service {
         return 200;
     }
     handleError(error, request, reply) {
-        request.log.error('Handler error:', error);
         let statusCode = 500;
-        let message = 'Internal server error';
-        let details = undefined;
-        if (error.statusCode) {
+        let errorResponse;
+        if (error.message && error.message.includes('is required!')) {
+            statusCode = 422;
+            const match = error.message.match(/"([^"]+)" is required!/);
+            const fieldName = match ? match[1] : 'field';
+            errorResponse = {
+                error: 'Validation Error',
+                reason: `Field "${fieldName}" is required`,
+                details: {
+                    type: 'missing_field',
+                    field: fieldName,
+                },
+            };
+        }
+        else if (error.validation) {
+            statusCode = 400;
+            const firstError = error.validation[0];
+            const field = firstError.instancePath?.replace('/', '') || 'field';
+            errorResponse = {
+                error: 'Validation Error',
+                reason: `${field}: ${firstError.message}`,
+                details: {
+                    type: 'validation',
+                    errors: error.validation,
+                },
+            };
+        }
+        else if (error.statusCode) {
             statusCode = error.statusCode;
-            message = error.message || message;
-            details = error.details;
+            errorResponse = {
+                error: error.name || 'Error',
+                reason: error.message,
+                ...(error.details && { details: error.details }),
+            };
         }
-        else if (error.code === '23505') {
-            // PostgreSQL unique violation
-            statusCode = 409;
-            message = 'Resource already exists';
-        }
-        const errorResponse = {
-            error: message,
-        };
-        if (details) {
-            errorResponse.details = details;
+        else {
+            errorResponse = {
+                error: 'Internal Server Error',
+                reason: error.message || 'Something went wrong',
+            };
         }
         if (process.env.NODE_ENV === 'development' && error.stack) {
             errorResponse.stack = error.stack;
@@ -215,14 +276,15 @@ class Service {
     }
     setErrorHandler() {
         this.app.setErrorHandler((error, request, reply) => {
-            request.log.error('Global error handler:', error);
             if (error.validation) {
+                const firstError = error.validation[0];
+                const field = firstError.instancePath?.replace('/', '') || 'field';
                 const errorResponse = {
-                    error: 'Validation failed',
+                    error: 'Validation Error',
+                    reason: `${field}: ${firstError.message}`,
                     details: {
                         type: 'request_validation',
                         errors: error.validation,
-                        message: error.message || 'Invalid request data',
                     },
                 };
                 return reply.status(400).send(errorResponse);
