@@ -35,6 +35,7 @@ export interface ServiceOptions {
     routes: RouteDefinition[];
     fastifyOptions?: FastifyServerOptions;
     autoDocs?: boolean;
+    strictValidation?: boolean;
 }
 export declare class Service {
     private app;
@@ -42,6 +43,8 @@ export declare class Service {
     constructor(options: ServiceOptions);
     initialize(): Promise<void>;
     private setupDocs;
+    private setupHooks;
+    private isSerializationError;
     private registerRoutes;
     private getStatusCode;
     private handleError;

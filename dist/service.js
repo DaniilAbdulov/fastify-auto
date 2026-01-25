@@ -34,33 +34,47 @@ class Service {
     app;
     options;
     constructor(options) {
+        const { name, routes, port = 3000, host = '0.0.0.0', prefix = '/api', fastifyOptions = {}, autoDocs = true, strictValidation = true, } = options;
         this.options = {
-            port: 3000,
-            host: '0.0.0.0',
-            prefix: '/api',
-            autoDocs: true,
-            ...options,
+            name,
+            routes,
+            port,
+            host,
+            prefix,
+            fastifyOptions,
+            autoDocs,
+            strictValidation,
         };
         this.app = (0, fastify_1.default)({
-            logger: true,
+            logger: {
+                level: 'info',
+                transport: {
+                    target: 'pino-pretty',
+                    options: {
+                        translateTime: 'HH:MM:ss Z',
+                        ignore: 'pid,hostname',
+                    },
+                },
+            },
             ajv: {
                 customOptions: {
-                    allErrors: true, // Показывать все ошибки
-                    removeAdditional: false, // НЕ удалять дополнительные поля ← ИЗМЕНИЛИ
+                    allErrors: true,
+                    removeAdditional: strictValidation ? false : 'all',
                     coerceTypes: true,
-                    useDefaults: false, // Не использовать значения по умолчанию
-                    strict: true, // Строгая валидация
-                    strictSchema: true, // Строгая валидация схемы
-                    strictNumbers: true, // Строгая валидация чисел
-                    strictTypes: true, // Строгая проверка типов
-                    strictTuples: true, // Строгая проверка кортежей
-                    strictRequired: true, // Строгая проверка обязательных полей
+                    useDefaults: true,
+                    strict: strictValidation,
+                    strictSchema: strictValidation,
+                    strictNumbers: strictValidation,
+                    strictTypes: strictValidation,
+                    strictTuples: strictValidation,
+                    strictRequired: strictValidation,
                 },
                 plugins: [ajv_keywords_1.default, ajv_errors_1.default],
             },
             http2: false,
-            ...this.options.fastifyOptions,
+            ...fastifyOptions,
         });
+        this.setupHooks();
     }
     async initialize() {
         if (this.options.autoDocs) {
@@ -74,6 +88,7 @@ class Service {
                 host: this.options.host,
             });
             console.log(`✅ ${this.options.name} started on http://${this.options.host}:${this.options.port}`);
+            console.log(`📚 Documentation: http://${this.options.host}:${this.options.port}/docs`);
         }
         catch (error) {
             console.error('Failed to start server:', error);
@@ -107,6 +122,30 @@ class Service {
         catch (error) {
             console.warn('Swagger dependencies not found. Docs disabled.');
         }
+    }
+    setupHooks() {
+        this.app.addHook('onRequest', async (request) => {
+            request.log.info(`Request: ${request.method} ${request.url}`);
+        });
+        this.app.addHook('onError', async (request, reply, error) => {
+            if (this.isSerializationError(error)) {
+                const errorResponse = {
+                    error: 'Response validation failed',
+                    details: {
+                        type: 'response_validation',
+                        message: error.message,
+                        error,
+                    },
+                };
+                reply.status(500).send(errorResponse);
+                return;
+            }
+        });
+    }
+    isSerializationError(error) {
+        return (error.serialization ||
+            (error.message && error.message.includes('is required!')) ||
+            error.message?.includes('serialization'));
     }
     registerRoutes() {
         for (const route of this.options.routes) {
@@ -142,7 +181,6 @@ class Service {
                         return reply.status(statusCode).send(result);
                     }
                     catch (error) {
-                        console.log(`1`);
                         this.handleError(error, request, reply);
                     }
                 },
@@ -157,7 +195,7 @@ class Service {
         return 200;
     }
     handleError(error, request, reply) {
-        console.log(`2`);
+        request.log.error('Handler error:', error);
         let statusCode = 500;
         let message = 'Internal server error';
         let details = undefined;
@@ -180,26 +218,22 @@ class Service {
         if (process.env.NODE_ENV === 'development' && error.stack) {
             errorResponse.stack = error.stack;
         }
-        console.log(`3`);
         return reply.status(statusCode).send(errorResponse);
     }
     setErrorHandler() {
         this.app.setErrorHandler((error, request, reply) => {
-            request.log.error(error);
-            console.log(`4`);
+            request.log.error('Global error handler:', error);
             if (error.validation) {
                 const errorResponse = {
                     error: 'Validation failed',
                     details: {
-                        type: 'validation',
+                        type: 'request_validation',
                         errors: error.validation,
-                        message: error.message,
+                        message: error.message || 'Invalid request data',
                     },
                 };
-                console.log(`5`);
                 return reply.status(400).send(errorResponse);
             }
-            console.log(`6`);
             this.handleError(error, request, reply);
         });
     }
