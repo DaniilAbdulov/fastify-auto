@@ -7,6 +7,8 @@ import fastify, {
 } from 'fastify';
 import ajvKeywords from 'ajv-keywords';
 import ajvErrors from 'ajv-errors';
+import {createExtensions} from './extensions/factory';
+import {ServiceExtensions} from './types/extensions';
 
 export interface RouteSchema {
   body?: any;
@@ -30,13 +32,16 @@ export interface RouteDefinition {
   path: string;
   schema?: RouteSchema;
   config?: RouteConfig;
-  handler: (params: {
-    body?: any;
-    params?: any;
-    query?: any;
-    headers?: any;
-    request: FastifyRequest;
-  }) => Promise<any> | any;
+  handler: (
+    params: {
+      body?: any;
+      params?: any;
+      query?: any;
+      headers?: any;
+      request: FastifyRequest;
+    },
+    extensions: ServiceExtensions,
+  ) => Promise<any> | any;
 }
 
 export interface ServiceOptions {
@@ -104,7 +109,9 @@ export class Service {
       await this.setupDocs();
     }
 
-    this.registerRoutes();
+    const extensions = await createExtensions(this.options);
+
+    this.registerRoutes(extensions);
     this.setErrorHandler();
 
     try {
@@ -155,7 +162,7 @@ export class Service {
     }
   }
 
-  private registerRoutes() {
+  private registerRoutes(extensions: ServiceExtensions) {
     for (const route of this.options.routes) {
       const fullPath = `${this.options.prefix}${route.path}`.replace(
         /\/\//g,
@@ -184,13 +191,16 @@ export class Service {
         schema: routeSchema,
         handler: async (request: FastifyRequest, reply: FastifyReply) => {
           try {
-            const result = await route.handler({
-              body: request.body,
-              params: request.params,
-              query: request.query,
-              headers: request.headers,
-              request,
-            });
+            const result = await route.handler(
+              {
+                body: request.body,
+                params: request.params,
+                query: request.query,
+                headers: request.headers,
+                request,
+              },
+              extensions,
+            );
 
             const statusCode = this.getStatusCode(route.method, result);
             const responseSchema = route.schema?.response?.[statusCode];
