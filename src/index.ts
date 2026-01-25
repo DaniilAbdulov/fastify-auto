@@ -1,4 +1,9 @@
-export type {FastifyRequest, FastifyReply, FastifyInstance} from 'fastify';
+export type {
+  FastifyRequest,
+  FastifyReply,
+  FastifyInstance,
+  HTTPMethods,
+} from 'fastify';
 
 export {
   Service,
