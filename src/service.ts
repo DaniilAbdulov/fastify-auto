@@ -80,13 +80,6 @@ export class Service {
     this.app = fastify({
       logger: {
         level: 'info',
-        transport: {
-          target: 'pino-pretty',
-          options: {
-            translateTime: 'HH:MM:ss Z',
-            ignore: 'pid,hostname',
-          },
-        },
       },
       ajv: {
         customOptions: {
