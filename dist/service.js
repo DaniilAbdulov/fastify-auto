@@ -75,6 +75,28 @@ class Service {
         const extensions = await (0, factory_1.createExtensions)(this.options);
         this.registerRoutes(extensions);
         this.setErrorHandler();
+        this.app.get('/ready', async (req, res) => {
+            try {
+                await extensions.pg.raw('SELECT 1');
+                return res.status(200).send({
+                    status: 'ready',
+                    message: 'Service is ready to accept traffic',
+                });
+            }
+            catch (error) {
+                console.error('❌ Ready check failed:', error);
+                return res.status(503).send({
+                    status: 'not ready',
+                    message: 'Service is not ready to accept traffic',
+                });
+            }
+        });
+        this.app.get('/health', async (req, res) => {
+            return res.status(200).send({
+                status: 'alive',
+                timestamp: new Date().toISOString(),
+            });
+        });
         try {
             await this.app.listen({
                 port: this.options.port,

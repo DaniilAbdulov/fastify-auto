@@ -7,13 +7,6 @@ async function createExtensions(config) {
     console.log(`create DB Extension`, config.dbConnection);
     if (config.dbConnection) {
         extensions.pg = (0, knex_1.knex)(config.dbConnection);
-        // try {
-        //   await extensions.pg.raw('SELECT 1');
-        //   console.log('✅ PostgreSQL connected successfully');
-        // } catch (error) {
-        //   console.error('❌ PostgreSQL connection failed:', error);
-        //   throw error;
-        // }
     }
     return extensions;
 }
