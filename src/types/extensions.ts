@@ -1,7 +1,9 @@
 import {Knex} from 'knex';
+import {Events} from '../Events/Events';
 
 export interface ServiceExtensions {
   pg: Knex;
+  events: Events;
 }
 
 export interface ServiceConfig {
