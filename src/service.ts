@@ -10,7 +10,7 @@ import ajvErrors from 'ajv-errors';
 import {createExtensions} from './extensions/factory';
 import {ServiceExtensions} from './types/extensions';
 import {Knex} from 'knex';
-import {Events} from './Events/Events';
+import {EventsOptions} from './Events/Events';
 
 export interface RouteSchema {
   body?: any;
@@ -56,7 +56,7 @@ export interface ServiceOptions {
   autoDocs?: boolean;
   strictValidation?: boolean;
   dbConnection: Knex.Config;
-  events: Events;
+  events: EventsOptions;
 }
 
 export class Service {

@@ -3,7 +3,7 @@ import {createClient, RedisClientType} from 'redis';
 const PROD_URL = 'redis://redis-service:6379';
 const DEV_URL = 'redis://localhost:6379';
 
-interface EventsOptions {
+export interface EventsOptions {
   ttl?: number;
   prefix?: string;
   channel?: string;
