@@ -62,6 +62,7 @@ export interface ServiceOptions {
 export class Service {
   private app: FastifyInstance;
   private options: Required<ServiceOptions>;
+  private _ext?: ServiceExtensions;
 
   constructor(options: ServiceOptions) {
     const {
@@ -118,6 +119,7 @@ export class Service {
     // }
 
     const extensions = await createExtensions(this.options);
+    this._ext = extensions;
 
     this.registerRoutes(extensions);
     this.setErrorHandler();
@@ -410,17 +412,21 @@ export class Service {
     return this.app;
   }
 
+  ext() {
+    return this._ext;
+  }
+
   async close(): Promise<void> {
     await this.app.close();
 
-    const extensions = await createExtensions(this.options);
+    const extensions = this.ext();
 
-    if (extensions.pg) {
+    if (extensions?.pg) {
       await extensions.pg.destroy();
       console.log('PostgreSQL connection closed');
     }
 
-    if (extensions.events) {
+    if (extensions?.events) {
       await extensions.events.disconnect();
       console.log('Redis connection closed');
     }
