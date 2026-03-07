@@ -10,7 +10,6 @@ import ajvErrors from 'ajv-errors';
 import {createExtensions} from './extensions/factory';
 import {ServiceExtensions} from './types/extensions';
 import {Knex} from 'knex';
-import {EventsOptions} from './Events/Events';
 
 export interface RouteSchema {
   body?: any;
@@ -56,13 +55,11 @@ export interface ServiceOptions {
   autoDocs?: boolean;
   strictValidation?: boolean;
   dbConnection: Knex.Config;
-  events: EventsOptions;
 }
 
 export class Service {
   private app: FastifyInstance;
   private options: Required<ServiceOptions>;
-  private _ext?: ServiceExtensions;
 
   constructor(options: ServiceOptions) {
     const {
@@ -75,7 +72,6 @@ export class Service {
       autoDocs = true,
       strictValidation = true,
       dbConnection,
-      events,
     } = options;
 
     this.options = {
@@ -88,7 +84,6 @@ export class Service {
       autoDocs,
       strictValidation,
       dbConnection,
-      events,
     };
 
     this.app = fastify({
@@ -119,7 +114,6 @@ export class Service {
     // }
 
     const extensions = await createExtensions(this.options);
-    this._ext = extensions;
 
     this.registerRoutes(extensions);
     this.setErrorHandler();
@@ -412,23 +406,14 @@ export class Service {
     return this.app;
   }
 
-  ext() {
-    return this._ext;
-  }
-
   async close(): Promise<void> {
     await this.app.close();
 
-    const extensions = this.ext();
+    const extensions = await createExtensions(this.options);
 
-    if (extensions?.pg) {
+    if (extensions.pg) {
       await extensions.pg.destroy();
       console.log('PostgreSQL connection closed');
-    }
-
-    if (extensions?.events) {
-      await extensions.events.disconnect();
-      console.log('Redis connection closed');
     }
   }
 }
