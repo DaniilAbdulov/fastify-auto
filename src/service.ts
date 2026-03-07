@@ -122,13 +122,6 @@ export class Service {
       try {
         await extensions.pg.raw('SELECT 1');
 
-        if (extensions.events) {
-          const isRedisConnected = await extensions.events.ping();
-          if (!isRedisConnected) {
-            throw new Error('Redis is not connected');
-          }
-        }
-
         return res.status(200).send({
           status: 'ready',
           message: 'Service is ready to accept traffic',
